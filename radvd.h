@@ -189,7 +189,7 @@ struct AdvDNSSL {
 	struct AdvDNSSL *next;
 };
 
-/* Options for 6lopan configuration */
+/* Options for 6lowpan configuration */
 
 struct AdvLowpanCo {
 	uint8_t ContextLength;
@@ -244,9 +244,17 @@ struct nd_opt_6co {
 	uint8_t nd_opt_6co_type;
 	uint8_t nd_opt_6co_len;
 	uint8_t nd_opt_6co_context_len;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	uint8_t nd_opt_6co_cid:4;
+	uint8_t nd_opt_6co_c:1;
+	uint8_t nd_opt_6co_res:3;
+#elif __BYTE_ORDER == __BIG_ENDIAN
 	uint8_t nd_opt_6co_res:3;
 	uint8_t nd_opt_6co_c:1;
 	uint8_t nd_opt_6co_cid:4;
+#else
+#error "no byte order specified!"
+#endif
 	uint16_t nd_opt_6co_reserved;
 	uint16_t nd_opt_6co_valid_lifetime;
 	struct in6_addr nd_opt_6co_con_prefix;
@@ -271,6 +279,10 @@ int set_interface_curhlim(const char *, uint8_t);
 int set_interface_linkmtu(const char *, uint32_t);
 int set_interface_reachtime(const char *, uint32_t);
 int set_interface_retranstimer(const char *, uint32_t);
+int set_interface_ctx_active(const char *iface, uint8_t id, uint8_t val);
+int set_interface_ctx_compression(const char *iface, uint8_t id, uint8_t val);
+int set_interface_ctx_plen(const char *iface, uint8_t id, uint8_t plen);
+int set_interface_ctx_pfx(const char *iface, uint8_t id, struct in6_addr pfx);
 int setup_allrouters_membership(int sock, struct Interface *);
 int setup_iface_addrs(struct Interface *);
 int update_device_index(struct Interface *iface);
@@ -327,6 +339,10 @@ int privsep_interface_curhlim(const char *iface, uint32_t hlim);
 int privsep_interface_linkmtu(const char *iface, uint32_t mtu);
 int privsep_interface_reachtime(const char *iface, uint32_t rtime);
 int privsep_interface_retranstimer(const char *iface, uint32_t rettimer);
+int privsep_interface_ctx_active(const char *iface, uint32_t id, uint32_t active);
+int privsep_interface_ctx_compression(const char *iface, uint32_t id, uint32_t c);
+int privsep_interface_ctx_pfx(const char *iface, uint32_t id, struct in6_addr pfx);
+int privsep_interface_ctx_plen(const char *iface, uint32_t id, uint32_t plen);
 void privsep_init(int);
 void privsep_set_write_fd(int);
 

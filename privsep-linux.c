@@ -22,6 +22,9 @@
 static int set_interface_var(const char *iface, const char *var, const char *name, uint32_t val);
 static void privsep_read_loop(void);
 
+static int set_interface_ctx_var(const char *iface, const char *var, const char *name, uint32_t id, uint32_t val);
+static int __set_interface_ctx_pfx(const char *iface, const char *var, const char *name, uint32_t id, struct in6_addr pfx);
+
 /* For reading or writing, depending on process */
 static int pfd = -1;
 
@@ -36,6 +39,10 @@ enum privsep_type {
 	SET_INTERFACE_CURHLIM,
 	SET_INTERFACE_REACHTIME,
 	SET_INTERFACE_RETRANSTIMER,
+	SET_INTERFACE_CTX_ACTIVE,
+	SET_INTERFACE_CTX_COMPRESSION,
+	SET_INTERFACE_CTX_PFX,
+	SET_INTERFACE_CTX_PLEN,
 };
 
 /* Command sent over pipe is a fixed size binary structure. */
@@ -43,6 +50,9 @@ struct privsep_command {
 	int type;
 	char iface[IFNAMSIZ];
 	uint32_t val;
+	/* 6lowpan */
+	uint32_t id;
+	struct in6_addr pfx;
 };
 
 /* Privileged read loop */
@@ -112,6 +122,34 @@ static void privsep_read_loop(void)
 			set_interface_var(cmd.iface, PROC_SYS_IP6_RETRANSTIMER, "RetransTimer", cmd.val / 1000 * USER_HZ);	/* XXX user_hz */
 			break;
 
+		case SET_INTERFACE_CTX_ACTIVE:
+			if (cmd.val != 0 && cmd.val != 1) {
+				flog(LOG_ERR, "(privsep) %s: 6CO %u active flag (%u) is not within the defined bounds, ignoring",
+				     cmd.iface, cmd.id, cmd.val);
+				break;
+			}
+			ret = set_interface_ctx_var(cmd.iface, DEBUGFS_6LOWPAN_CTX_ACTIVE, "6CO active flag (bool)", cmd.id, cmd.val);
+			break;
+		case SET_INTERFACE_CTX_COMPRESSION:
+			if (cmd.val != 0 && cmd.val != 1) {
+				flog(LOG_ERR, "(privsep) %s: 6CO %u compression flag (%u) is not within the defined bounds, ignoring",
+				     cmd.iface, cmd.id, cmd.val);
+				break;
+			}
+			ret = set_interface_ctx_var(cmd.iface, DEBUGFS_6LOWPAN_CTX_COMPRESSION, "6CO compression flag (bool)", cmd.id, cmd.val);
+			break;
+		case SET_INTERFACE_CTX_PFX:
+			ret = __set_interface_ctx_pfx(cmd.iface, DEBUGFS_6LOWPAN_CTX_PREFIX, "6CO prefix", cmd.id, cmd.pfx);
+			break;
+		case SET_INTERFACE_CTX_PLEN:
+			if (cmd.val > MAX_PrefixLen) {
+				flog(LOG_ERR, "(privsep) %s: 6CO %u prefix length (%u) is not within the defined bounds, ignoring",
+				     cmd.iface, cmd.id, cmd.val);
+				break;
+			}
+			ret = set_interface_ctx_var(cmd.iface, DEBUGFS_6LOWPAN_CTX_PREFIX_LEN, "6CO prefix length", cmd.id, cmd.val);
+			break;
+
 		default:
 			/* Bad command */
 			break;
@@ -174,12 +212,59 @@ int privsep_interface_retranstimer(const char *iface, uint32_t rettimer)
 	return 0;
 }
 
+int privsep_interface_ctx_active(const char *iface, uint32_t id, uint32_t active)
+{
+	struct privsep_command cmd;
+	cmd.type = SET_INTERFACE_CTX_ACTIVE;
+	strncpy(cmd.iface, iface, sizeof(cmd.iface));
+	cmd.id = id;
+	cmd.val = active;
+	if (writen(pfd, &cmd, sizeof(cmd)) != sizeof(cmd))
+		return -1;
+	return 0;
+}
+
+int privsep_interface_ctx_compression(const char *iface, uint32_t id, uint32_t c)
+{
+	struct privsep_command cmd;
+	cmd.type = SET_INTERFACE_CTX_COMPRESSION;
+	strncpy(cmd.iface, iface, sizeof(cmd.iface));
+	cmd.id = id;
+	cmd.val = c;
+	if (writen(pfd, &cmd, sizeof(cmd)) != sizeof(cmd))
+		return -1;
+	return 0;
+}
+
+int privsep_interface_ctx_pfx(const char *iface, uint32_t id, struct in6_addr pfx)
+{
+	struct privsep_command cmd;
+	cmd.type = SET_INTERFACE_CTX_PFX;
+	strncpy(cmd.iface, iface, sizeof(cmd.iface));
+	cmd.id = id;
+	cmd.pfx = pfx;
+	if (writen(pfd, &cmd, sizeof(cmd)) != sizeof(cmd))
+		return -1;
+	return 0;
+}
+
+int privsep_interface_ctx_plen(const char *iface, uint32_t id, uint32_t plen)
+{
+	struct privsep_command cmd;
+	cmd.type = SET_INTERFACE_CTX_PLEN;
+	strncpy(cmd.iface, iface, sizeof(cmd.iface));
+	cmd.id = id;
+	cmd.val = plen;
+	if (writen(pfd, &cmd, sizeof(cmd)) != sizeof(cmd))
+		return -1;
+	return 0;
+}
+
 /* note: also called from the root context */
-static int set_interface_var(const char *iface, const char *var, const char *name, uint32_t val)
+static int __set_interface_var(char * spath, const char *iface, const char *var, const char *name, uint32_t val)
 {
 	int retval = -1;
 	FILE * fp = 0;
-	char * spath = strdupf(var, iface);
 
 	/* No path traversal */
 	if (!iface[0] || !strcmp(iface, ".") || !strcmp(iface, "..") || strchr(iface, '/'))
@@ -210,3 +295,56 @@ cleanup:
 	return retval;
 }
 
+/* note: also called from the root context */
+static int set_interface_var(const char *iface, const char *var, const char *name, uint32_t val)
+{
+	char * spath = strdupf(var, iface);
+
+	return __set_interface_var(spath, iface, var, name, val);
+}
+
+/* note: also called from the root context */
+static int set_interface_ctx_var(const char *iface, const char *var, const char *name, uint32_t id, uint32_t val)
+{
+	char * spath = strdupf(var, iface, id);
+
+	return __set_interface_var(spath, iface, var, name, val);
+}
+
+/* note: also called from the root context */
+static int __set_interface_ctx_pfx(const char *iface, const char *var, const char *name, uint32_t id, struct in6_addr pfx)
+{
+	int retval = -1;
+	FILE * fp = 0;
+	char * spath = strdupf(var, iface, id);
+
+	/* No path traversal */
+	if (!iface[0] || !strcmp(iface, ".") || !strcmp(iface, "..") || strchr(iface, '/'))
+		goto cleanup;
+
+	if (access(spath, F_OK) != 0)
+		goto cleanup;
+
+	fp = fopen(spath, "w");
+	if (!fp) {
+		if (name)
+			flog(LOG_ERR, "failed to set %s (%pI6c) for %s: %s", name, &pfx, iface, strerror(errno));
+		goto cleanup;
+	}
+
+	if (0 > fprintf(fp, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
+			be16toh(pfx.s6_addr16[0]), be16toh(pfx.s6_addr16[1]), be16toh(pfx.s6_addr16[2]), be16toh(pfx.s6_addr16[3]),
+			be16toh(pfx.s6_addr16[4]), be16toh(pfx.s6_addr16[5]), be16toh(pfx.s6_addr16[6]), be16toh(pfx.s6_addr16[7]))) {
+		goto cleanup;
+	}
+
+	retval = 0;
+
+cleanup:
+	if (fp)
+		fclose(fp);
+
+	free(spath);
+
+	return retval;
+}

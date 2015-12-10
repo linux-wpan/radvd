@@ -143,6 +143,30 @@ int set_interface_retranstimer(const char *iface, uint32_t rettimer)
 	return -1;
 }
 
+int set_interface_ctx_active(const char *iface, uint8_t id, uint8_t val)
+{
+	dlog(LOG_DEBUG, 4, "update 6LoWPAN context not supported");
+	return 0;
+}
+
+int set_interface_ctx_compression(const char *iface, uint8_t id, uint8_t val)
+{
+	dlog(LOG_DEBUG, 4, "update 6LoWPAN context not supported");
+	return 0;
+}
+
+int set_interface_ctx_plen(const char *iface, uint8_t id, uint8_t plen)
+{
+	dlog(LOG_DEBUG, 4, "update 6LoWPAN context not supported");
+	return 0;
+}
+
+int set_interface_ctx_pfx(const char *iface, uint8_t id, struct in6_addr pfx)
+{
+	dlog(LOG_DEBUG, 4, "update 6LoWPAN context not supported");
+	return 0;
+}
+
 int check_ip6_forwarding(void)
 {
 	dlog(LOG_DEBUG, 4, "checking ipv6 forwarding not supported");

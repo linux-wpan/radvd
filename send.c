@@ -35,7 +35,7 @@ static void add_mtu(struct safe_buffer * sb, uint32_t AdvLinkMTU);
 static void add_sllao(struct safe_buffer * sb, struct sllao const *sllao);
 static void add_mipv6_rtr_adv_interval(struct safe_buffer * sb, double MaxRtrAdvInterval);
 static void add_mipv6_home_agent_info(struct safe_buffer * sb, struct mipv6 const * mipv6);
-static void add_lowpanco(struct safe_buffer * sb, struct AdvLowpanCo const *lowpanco);
+static void add_lowpanco(struct safe_buffer * sb, struct AdvLowpanCo *lowpanco);
 static void add_abro(struct safe_buffer * sb, struct AdvAbro const *abroo);
 
 #ifdef UNIT_TEST
@@ -540,21 +540,31 @@ static void add_mipv6_home_agent_info(struct safe_buffer * sb, struct mipv6 cons
 /*
  * Add 6co option
  */
-static void add_lowpanco(struct safe_buffer * sb, struct AdvLowpanCo const *lowpanco)
+static void add_lowpanco(struct safe_buffer * sb, struct AdvLowpanCo *lowpanco)
 {
 	struct nd_opt_6co co;
+	size_t nd_opt_6co_size;
 
-	memset(&co, 0, sizeof(co));
+	for (struct AdvLowpanCo * current = lowpanco; current; current = current->next) {
+		memset(&co, 0, sizeof(co));
 
-	co.nd_opt_6co_type = ND_OPT_6CO;
-	co.nd_opt_6co_len = 3;
-	co.nd_opt_6co_context_len = lowpanco->ContextLength;
-	co.nd_opt_6co_c = lowpanco->ContextCompressionFlag;
-	co.nd_opt_6co_cid = lowpanco->AdvContextID;
-	co.nd_opt_6co_valid_lifetime = lowpanco->AdvLifeTime;
-	co.nd_opt_6co_con_prefix = lowpanco->AdvContextPrefix;
+		co.nd_opt_6co_type = ND_OPT_6CO;
+		co.nd_opt_6co_context_len = current->ContextLength;
+		if (co.nd_opt_6co_context_len > 64) {
+			co.nd_opt_6co_len = 3;
+			nd_opt_6co_size = sizeof(co);
+		} else {
+			co.nd_opt_6co_len = 2;
+			nd_opt_6co_size = sizeof(co) - 8;
+		}
+		co.nd_opt_6co_c = current->ContextCompressionFlag;
+		co.nd_opt_6co_cid = current->AdvContextID;
+		co.nd_opt_6co_valid_lifetime = current->AdvLifeTime;
+		co.nd_opt_6co_con_prefix = current->AdvContextPrefix;
 
-	safe_buffer_append(sb, &co, sizeof(co));
+		safe_buffer_append(sb, &co, nd_opt_6co_size);
+
+	}
 }
 
 static void add_abro(struct safe_buffer * sb, struct AdvAbro const *abroo)

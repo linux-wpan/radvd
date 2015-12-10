@@ -53,6 +53,7 @@ static struct in6_addr get_prefix6(struct in6_addr const *addr, struct in6_addr 
 %token		T_DNSSL
 %token		T_CLIENTS
 %token		T_LOWPANCO
+%token		T_CTX
 %token		T_ABRO
 
 %token	<str>	STRING
@@ -113,7 +114,6 @@ static struct in6_addr get_prefix6(struct in6_addr const *addr, struct in6_addr 
 
 %token		T_AdvContextLength
 %token		T_AdvContextCompressionFlag
-%token		T_AdvContextID
 %token		T_AdvLifeTime
 %token		T_AdvContextPrefix
 
@@ -130,7 +130,7 @@ static struct in6_addr get_prefix6(struct in6_addr const *addr, struct in6_addr 
 %type	<rinfo>	routedef
 %type	<rdnssinfo> rdnssdef
 %type	<dnsslinfo> dnssldef
-%type   <lowpancoinfo> lowpancodef
+%type   <lowpancoinfo> lowpancolist ctxlist
 %type   <abroinfo> abrodef
 %type   <num>	number_or_infinity
 
@@ -158,7 +158,7 @@ static struct AdvPrefix *prefix;
 static struct AdvRoute *route;
 static struct AdvRDNSS *rdnss;
 static struct AdvDNSSL *dnssl;
-static struct AdvLowpanCo *lowpanco;
+static struct AdvLowpanCo *lowpanco, *lowpanco_head;
 static struct AdvAbro  *abro;
 static void cleanup(void);
 #define ABORT	do { cleanup(); YYABORT; } while (0);
@@ -228,7 +228,7 @@ ifaceparam 	: ifaceval
 		| routedef 	{ ADD_TO_LL(struct AdvRoute, AdvRouteList, $1); }
 		| rdnssdef 	{ ADD_TO_LL(struct AdvRDNSS, AdvRDNSSList, $1); }
 		| dnssldef 	{ ADD_TO_LL(struct AdvDNSSL, AdvDNSSLList, $1); }
-		| lowpancodef   { ADD_TO_LL(struct AdvLowpanCo, AdvLowpanCoList, $1); }
+		| lowpancolist	{ ADD_TO_LL(struct AdvLowpanCo, AdvLowpanCoList, $1); }
 		| abrodef       { ADD_TO_LL(struct AdvAbro, AdvAbroList, $1); }
 		;
 
@@ -913,23 +913,55 @@ dnsslparms	: T_AdvDNSSLLifetime number_or_infinity ';'
 		}
 		;
 
-lowpancodef 	: lowpancohead  '{' optional_lowpancoplist '}' ';'
+lowpancolist   : lowpancodef  '{' ctxlist '}' ';'
 		{
-			$$ = lowpanco;
-			lowpanco = NULL;
+			$$ = $3;
 		}
 		;
 
-lowpancohead	: T_LOWPANCO
+lowpancodef	: T_LOWPANCO
 		{
-			lowpanco = malloc(sizeof(struct AdvLowpanCo));
+			lowpanco_head = NULL;
+		}
+		;
 
+ctxlist		: ctxhead '{' optional_lowpancoplist '}' ';'
+		{
+			$$ = lowpanco;
+		}
+		| ctxlist ctxhead '{' optional_lowpancoplist '}' ';'
+		{
+
+			if (lowpanco_head == NULL)
+				lowpanco_head = lowpanco;
+
+			lowpanco->next = $1;
+			$$ = lowpanco;
+		}
+		;
+
+ctxhead		: T_CTX NUMBER
+		{
+			if ($2 > MAX_CIDLen - 1) {
+				flog(LOG_ERR, "invalid context id %d in %s, line %d", $2, filename, num_lines);
+				ABORT;
+			}
+
+			for (struct AdvLowpanCo * current = lowpanco_head; current; current = current->next) {
+				if ($2 == current->AdvContextID) {
+					flog(LOG_ERR, "context id %d already exists in %s, line %d", $2, filename, num_lines);
+					ABORT;
+				}
+			}
+
+			lowpanco = malloc(sizeof(struct AdvLowpanCo));
 			if (lowpanco == NULL) {
 				flog(LOG_CRIT, "malloc failed: %s", strerror(errno));
 				ABORT;
 			}
 
 			memset(lowpanco, 0, sizeof(struct AdvLowpanCo));
+			lowpanco->AdvContextID = $2;
 		}
 		;
 
@@ -943,19 +975,25 @@ lowpancoplist	: lowpancoplist lowpancoparms
 
 lowpancoparms 	: T_AdvContextLength NUMBER ';'
 		{
+			if ($2 > MAX_PrefixLen)
+			{
+				flog(LOG_ERR, "invalid context prefix length in %s, line %d", filename, num_lines);
+				ABORT;
+			}
+
 			lowpanco->ContextLength = $2;
 		}
 		| T_AdvContextCompressionFlag SWITCH ';'
 		{
 			lowpanco->ContextCompressionFlag = $2;
 		}
-		| T_AdvContextID NUMBER ';'
-		{
-			lowpanco->AdvContextID = $2;
-		}
 		| T_AdvLifeTime NUMBER ';'
 		{
 			lowpanco->AdvLifeTime = $2;
+		}
+		| T_AdvContextPrefix IPV6ADDR ';'
+		{
+			memcpy(&lowpanco->AdvContextPrefix, $2, sizeof(struct in6_addr));
 		}
 		;
 
@@ -1102,9 +1140,15 @@ static void cleanup(void)
 		dnssl = 0;
 	}
 
-	if (lowpanco) {
-		free(lowpanco);
+	if (lowpanco_head) {
+		struct AdvLowpanCo *c = lowpanco_head, *tmp;
+		while (!c) {
+			tmp = c;
+			c = c->next;
+			free(tmp);
+		}
 		lowpanco = 0;
+		lowpanco_head = 0;
 	}
 
 	if (abro) {

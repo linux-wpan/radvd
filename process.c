@@ -389,6 +389,50 @@ static void process_ra(struct Interface *iface, unsigned char *msg, int len, str
 				}
 				break;
 			}
+		case ND_OPT_6CO: {
+				struct nd_opt_6co *ctxinfo = (struct nd_opt_6co *)opt_str;
+				struct in6_addr pfx = {};
+
+				/* check if we can evaluate the len field */
+				if (len < 2)
+					return;
+
+				switch (ctxinfo->nd_opt_6co_len) {
+				case 2:
+					if (len < (sizeof(*ctxinfo) - 8))
+						return;
+
+					memcpy(&pfx, &ctxinfo->nd_opt_6co_con_prefix, 8);
+					break;
+				case 3:
+					if (len < (sizeof(*ctxinfo)))
+						return;
+
+					memcpy(&pfx, &ctxinfo->nd_opt_6co_con_prefix, 16);
+					break;
+				default:
+					return;
+				}
+
+				if (ctxinfo->nd_opt_6co_cid > MAX_CIDLen - 1)
+					return;
+
+				/* If the Valid Lifetime field in the 6CO is zero, then the entry is immediately deleted. */
+				if (!ctxinfo->nd_opt_6co_valid_lifetime)
+					set_interface_ctx_active(iface->props.name, ctxinfo->nd_opt_6co_cid, 0);
+				else {
+					/* disable it while updating context */
+					set_interface_ctx_active(iface->props.name, ctxinfo->nd_opt_6co_cid, 0);
+
+					set_interface_ctx_pfx(iface->props.name, ctxinfo->nd_opt_6co_cid, pfx);
+					set_interface_ctx_plen(iface->props.name, ctxinfo->nd_opt_6co_cid, ctxinfo->nd_opt_6co_context_len);
+					set_interface_ctx_compression(iface->props.name, ctxinfo->nd_opt_6co_cid, ctxinfo->nd_opt_6co_c);
+
+					/* enable it again */
+					set_interface_ctx_active(iface->props.name, ctxinfo->nd_opt_6co_cid, 1);
+				}
+				break;
+			}
 		default:
 			dlog(LOG_DEBUG, 1, "unknown option %d in RA on %s from %s", (int)*opt_str, iface->props.name, addr_str);
 			break;

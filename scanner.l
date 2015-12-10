@@ -49,6 +49,7 @@ RDNSS			{ return T_RDNSS; }
 DNSSL			{ return T_DNSSL; }
 clients			{ return T_CLIENTS; }
 lowpanco		{ return T_LOWPANCO; }
+ctx			{ return T_CTX; }
 abro			{ return T_ABRO; }
 
 IgnoreIfMissing		{ return T_IgnoreIfMissing; }
@@ -102,7 +103,6 @@ AdvMobRtrSupportFlag	{ return T_AdvMobRtrSupportFlag; }
 
 AdvContextLength	{ return T_AdvContextLength; }
 AdvContextCompressionFlag { return T_AdvContextCompressionFlag; }
-AdvContextID		{ return T_AdvContextID; }
 AdvLifeTime		{ return T_AdvLifeTime; }
 AdvContextPrefix	{ return T_AdvContextPrefix; }
 

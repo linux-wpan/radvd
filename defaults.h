@@ -125,6 +125,9 @@
 
 #define MAX_PrefixLen			128
 
+/* RFC6282 Constraints */
+#define MAX_CIDLen			16
+
 /* SLAAC (RFC4862) Constants and Derived Values */
 #define MIN_AdvValidLifetime		7200	/* 2 hours in secs */
 

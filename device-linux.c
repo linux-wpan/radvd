@@ -86,6 +86,18 @@ int update_device_info(int sock, struct Interface *iface)
 	case ARPHRD_6LOWPAN:
 		iface->sllao.if_hwaddr_len = 64;
 		iface->sllao.if_prefix_len = 64;
+
+		if (iface->AdvLowpanCoList) {
+			for (int i = 0; i < MAX_CIDLen; i++)
+				set_interface_ctx_active(iface->props.name, i, 0);
+
+			for (struct AdvLowpanCo * current = iface->AdvLowpanCoList; current; current = current->next) {
+				set_interface_ctx_compression(iface->props.name, current->AdvContextID, current->ContextCompressionFlag);
+				set_interface_ctx_plen(iface->props.name, current->AdvContextID, current->ContextLength);
+				set_interface_ctx_pfx(iface->props.name, current->AdvContextID, current->AdvContextPrefix);
+				set_interface_ctx_active(iface->props.name, current->AdvContextID, 1);
+			}
+		}
 		break;
 	default:
 		iface->sllao.if_hwaddr_len = -1;
@@ -145,6 +157,26 @@ int setup_allrouters_membership(int sock, struct Interface *iface)
 	}
 
 	return 0;
+}
+
+int set_interface_ctx_active(const char *iface, uint8_t id, uint8_t val)
+{
+	return privsep_interface_ctx_active(iface, id, val);
+}
+
+int set_interface_ctx_compression(const char *iface, uint8_t id, uint8_t val)
+{
+	return privsep_interface_ctx_compression(iface, id, val);
+}
+
+int set_interface_ctx_plen(const char *iface, uint8_t id, uint8_t plen)
+{
+	return privsep_interface_ctx_plen(iface, id, plen);
+}
+
+int set_interface_ctx_pfx(const char *iface, uint8_t id, struct in6_addr pfx)
+{
+	return privsep_interface_ctx_pfx(iface, id, pfx);
 }
 
 int set_interface_linkmtu(const char *iface, uint32_t mtu)
