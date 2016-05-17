@@ -32,7 +32,8 @@ static void add_rdnss(struct safe_buffer * sb, struct AdvRDNSS const *rdnss, int
 static size_t serialize_domain_names(struct safe_buffer * safe_buffer, struct AdvDNSSL const *dnssl);
 static void add_dnssl(struct safe_buffer * sb, struct AdvDNSSL const *dnssl, int cease_adv);
 static void add_mtu(struct safe_buffer * sb, uint32_t AdvLinkMTU);
-static void add_sllao(struct safe_buffer * sb, struct sllao const *sllao);
+static void add_sllao(struct safe_buffer * sb, const uint8_t *if_hwaddr,
+		      int if_hwaddr_len);
 static void add_mipv6_rtr_adv_interval(struct safe_buffer * sb, double MaxRtrAdvInterval);
 static void add_mipv6_home_agent_info(struct safe_buffer * sb, struct mipv6 const * mipv6);
 static void add_lowpanco(struct safe_buffer * sb, struct AdvLowpanCo *lowpanco);
@@ -431,7 +432,8 @@ static void add_dnssl(struct safe_buffer * safe_buffer, struct AdvDNSSL const *d
 /*
  * add Source Link-layer Address option
  */
-static void add_sllao(struct safe_buffer * sb, struct sllao const *sllao)
+static void add_sllao(struct safe_buffer * sb, const uint8_t *if_hwaddr,
+		      int if_hwaddr_len)
 {
 	/* *INDENT-OFF* */
 	/*
@@ -467,14 +469,14 @@ static void add_sllao(struct safe_buffer * sb, struct sllao const *sllao)
 	/* *INDENT-ON* */
 
 	/* +2 for the ND_OPT_SOURCE_LINKADDR and the length (each occupy one byte) */
-	size_t const sllao_bytes = (sllao->if_hwaddr_len / 8) + 2;
+	size_t const sllao_bytes = (if_hwaddr_len / 8) + 2;
 	size_t const sllao_len = (sllao_bytes + 7) / 8;
 
 	uint8_t buff[2] = {ND_OPT_SOURCE_LINKADDR, (uint8_t)sllao_len};
 	safe_buffer_append(sb, buff, sizeof(buff));
 
 	/* if_hwaddr_len is in bits, so divide by 8 to get the byte count. */
-	safe_buffer_append(sb, sllao->if_hwaddr, sllao->if_hwaddr_len / 8);
+	safe_buffer_append(sb, if_hwaddr, if_hwaddr_len / 8);
 	safe_buffer_pad(sb, sllao_len * 8 - sllao_bytes);
 }
 
@@ -608,8 +610,17 @@ static void build_ra(struct safe_buffer * sb, struct Interface const * iface)
 		add_mtu(sb, iface->AdvLinkMTU);
 	}
 
-	if (iface->AdvSourceLLAddress && iface->sllao.if_hwaddr_len > 0) {
-		add_sllao(sb, &iface->sllao);
+	if (iface->AdvSourceLLAddress) {
+		if (iface->sllao.if_hwaddr_len > 0) {
+			add_sllao(sb, iface->sllao.if_hwaddr, iface->sllao.if_hwaddr_len);
+		}
+
+		/* add second sllao for 802.15.4 short address if valid unicast */
+		if (!(iface->short_addr & 0x8000)) {
+			uint16_t short_addr_be = htons(iface->short_addr);
+
+			add_sllao(sb, (const uint8_t *)&short_addr_be, SHORT_ADDR_BITS_LEN);
+		}
 	}
 
 	if (iface->mipv6.AdvIntervalOpt) {

@@ -29,6 +29,37 @@
 static char const *hwstr(unsigned short sa_family);
 
 /*
+ * this function gets the short address which is available on 802,15.4
+ * 6lowpan only. All others will return an invalid address which is the
+ * broadcast address. If it's a valid address it will be added to RA
+ * messages.
+ */
+static uint16_t lowpan_get_short_addr(struct Interface *iface)
+{
+	unsigned int short_addr;
+	char path[PATH_MAX];
+	FILE *f;
+	int ret;
+
+	ret = sprintf(path, DEBUGFS_6LOWPAN_SHORT_ADDR, iface->props.name);
+	if (ret < 0)
+		return SHORT_ADDR_UNSPEC;
+
+	f = fopen(path, "r");
+	if (!f)
+		return SHORT_ADDR_UNSPEC;
+
+	ret = fscanf(f, "0x%04x", &short_addr);
+	if (ferror(f)) {
+		fclose(f);
+		return SHORT_ADDR_UNSPEC;
+	}
+
+	fclose(f);
+	return short_addr;
+}
+
+/*
  * this function gets the hardware type and address of an interface,
  * determines the link layer token length and checks it against
  * the defined prefixes
@@ -86,6 +117,8 @@ int update_device_info(int sock, struct Interface *iface)
 	case ARPHRD_6LOWPAN:
 		iface->sllao.if_hwaddr_len = 64;
 		iface->sllao.if_prefix_len = 64;
+		/* for 802.15.4 only, all others L2 should fail and assign invalid address */
+		iface->short_addr = lowpan_get_short_addr(iface);
 
 		if (iface->AdvLowpanCoList) {
 			for (int i = 0; i < MAX_CIDLen; i++)

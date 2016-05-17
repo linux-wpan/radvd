@@ -102,6 +102,8 @@ struct Interface {
 		int if_maxmtu;
 	} sllao;
 
+	uint16_t short_addr;
+
 	struct mipv6 {
 		/* Mobile IPv6 extensions */
 		int AdvIntervalOpt;

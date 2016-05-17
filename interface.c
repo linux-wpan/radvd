@@ -47,6 +47,7 @@ void iface_init_defaults(struct Interface *iface)
 
 	iface->AdvLinkMTU = DFLT_AdvLinkMTU;
 
+	iface->short_addr = SHORT_ADDR_UNSPEC;
 }
 
 

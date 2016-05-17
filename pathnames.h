@@ -44,6 +44,7 @@
 #define DEBUGFS_6LOWPAN_CTX_COMPRESSION "/sys/kernel/debug/6lowpan/%s/contexts/%d/compression"
 #define DEBUGFS_6LOWPAN_CTX_PREFIX "/sys/kernel/debug/6lowpan/%s/contexts/%d/prefix"
 #define DEBUGFS_6LOWPAN_CTX_PREFIX_LEN "/sys/kernel/debug/6lowpan/%s/contexts/%d/prefix_len"
+#define DEBUGFS_6LOWPAN_SHORT_ADDR "/sys/kernel/debug/6lowpan/%s/ieee802154/short_addr"
 #else				/* BSD */
 #define SYSCTL_IP6_FORWARDING CTL_NET, PF_INET6, IPPROTO_IPV6, IPV6CTL_FORWARDING
 #endif

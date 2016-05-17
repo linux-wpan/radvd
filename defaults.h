@@ -127,6 +127,8 @@
 
 /* RFC6282 Constraints */
 #define MAX_CIDLen			16
+#define SHORT_ADDR_UNSPEC		0xfffe
+#define SHORT_ADDR_BITS_LEN		16
 
 /* SLAAC (RFC4862) Constants and Derived Values */
 #define MIN_AdvValidLifetime		7200	/* 2 hours in secs */
