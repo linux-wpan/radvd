@@ -17,6 +17,7 @@
 #include "radvd.h"
 #include "defaults.h"
 #include "pathnames.h"
+#include "netlink.h"
 
 #ifndef IPV6_ADDR_LINKLOCAL
 #define IPV6_ADDR_LINKLOCAL   0x0020U
@@ -115,8 +116,19 @@ int update_device_info(int sock, struct Interface *iface)
 		break;
 #endif				/* ARPHDR_ARCNET */
 	case ARPHRD_6LOWPAN:
-		iface->sllao.if_hwaddr_len = 64;
-		iface->sllao.if_prefix_len = 64;
+#ifdef HAVE_NETLINK
+		/* hwaddr length differs on some L2 type lets detect them */
+		iface->sllao.if_hwaddr_len = netlink_get_device_addr_len(iface);
+		if (iface->sllao.if_hwaddr_len != -1) {
+			iface->sllao.if_hwaddr_len *= 8;
+			iface->sllao.if_prefix_len = 64;
+		} else {
+			iface->sllao.if_prefix_len = -1;
+		}
+#else
+		iface->sllao.if_hwaddr_len = -1;
+		iface->sllao.if_prefix_len = -1;
+#endif
 		/* for 802.15.4 only, all others L2 should fail and assign invalid address */
 		iface->short_addr = lowpan_get_short_addr(iface);
 
